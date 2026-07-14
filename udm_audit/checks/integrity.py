@@ -55,8 +55,8 @@ class IntegrityCheck(CheckBase):
                     continue
                 
                 file_path = parts[-1]
-                # Ignora documentação e manpages que frequentemente mudam ou são removidas no UniFiOS para poupar espaço
-                if file_path.startswith(("/usr/share/doc", "/usr/share/man", "/usr/share/info")):
+                # Ignora /usr/share/ que frequentemente tem docs, locales e manuais removidos no UniFiOS para poupar espaço
+                if file_path.startswith("/usr/share/"):
                     continue
                 
                 # Se a flag de MD5 ('5') aparecer, o hash foi alterado
