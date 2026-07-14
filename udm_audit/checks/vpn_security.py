@@ -201,8 +201,8 @@ class VPNSecurityCheck(CheckBase):
 
         # Verifica arquivos de chave com permissões erradas
         key_files, _, _ = self.executor.execute(
-            "find /etc/openvpn -name '*.key' -o -name '*.pem' -o -name 'ta.key' "
-            "2>/dev/null | xargs ls -la 2>/dev/null"
+            "find /etc/openvpn -type f \\( -name '*.key' -o -name '*.pem' -o -name 'ta.key' \\) "
+            "-exec ls -la {} \\; 2>/dev/null"
         )
         if key_files:
             for line in key_files.splitlines():

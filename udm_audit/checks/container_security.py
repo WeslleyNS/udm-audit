@@ -56,7 +56,7 @@ class ContainerSecurityCheck(CheckBase):
         dangerous_nopasswd = []
         for line in nopasswd_lines:
             # Wildcard = execução arbitrária
-            if re.search(r"ALL\s*=.*ALL|NOPASSWD\s*:\s*ALL", line, re.IGNORECASE):
+            if re.search(r"NOPASSWD\s*:\s*ALL\b", line, re.IGNORECASE):
                 dangerous_nopasswd.append((line, "NOPASSWD: ALL — execução de qualquer comando sem senha"))
             elif re.search(r"\*|/bin/sh|/bin/bash|/usr/bin/python|/bin/cp\s+\*", line):
                 dangerous_nopasswd.append((line, "Wildcard ou shell — permite execução arbitrária"))
