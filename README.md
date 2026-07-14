@@ -30,15 +30,18 @@ curl -sSL https://raw.githubusercontent.com/WeslleyNS/udm-audit/main/run.sh | ba
 
 ## Checks implementados
 
-| ID       | Nome                    | O que verifica                                              |
-|----------|-------------------------|-------------------------------------------------------------|
-| CHK-001  | Version / CVE Check     | Versão UniFiOS e Network App vs CVEs conhecidas             |
-| CHK-002  | SSH Hardening           | sshd_config, root login, auth por senha, exposição de porta |
-| CHK-003  | VPN Credentials         | Permissões WireGuard/IPsec/OpenVPN, peers, private keys     |
-| CHK-004  | Container Security      | sudo rules, capabilities, volume mounts perigosos           |
-| CHK-005  | Network Exposure        | Portas em escuta, MongoDB exposto, iptables/nftables        |
-| CHK-006  | Update Status           | Upgrades disponíveis, últimos logins                        |
-| CHK-007  | Logging Config          | Syslog remoto, journald persistence                         |
+| ID       | Nome                            | O que verifica                                              |
+|----------|---------------------------------|-------------------------------------------------------------|
+| CHK-001  | Version / CVE Check             | Versão UniFiOS e Network App vs CVEs conhecidas             |
+| CHK-002  | SSH Hardening                   | sshd_config, root login, auth por senha, exposição de porta |
+| CHK-003  | VPN Credentials                 | Permissões WireGuard/IPsec/OpenVPN, peers, private keys     |
+| CHK-004  | Container Security              | sudo rules, capabilities, volume mounts perigosos           |
+| CHK-005  | Network Exposure                | Portas em escuta, MongoDB exposto, iptables/nftables        |
+| CHK-006  | Update Status                   | Upgrades disponíveis, últimos logins                        |
+| CHK-007  | Logging Config                  | Syslog remoto, journald persistence                         |
+| CHK-008  | System Integrity & Persistence  | DPKG MD5 hash, detecção de malwares/rootkits, cronjobs      |
+| CHK-009  | Firewall & Network Policies     | Isolamento Inter-VLAN, Status IPS (Suricata), Default DROP  |
+| CHK-010  | Controller API & Internal Config| Bind seguro do MongoDB, status Guest Portal e 2FA           |
 
 CVEs cobertas (principais): CVE-2021-22908 (SSRF), CVE-2021-22909 (privesc),
 CVE-2021-22910 (XSS), CVE-2023-35807 (SQLi), CVE-2024-42028 (container escape).
@@ -240,6 +243,13 @@ ALL_CHECKS = [..., MeuCheck]
 ---
 
 ## Changelog
+
+### v1.1.0
+
+- **Auditoria de Integridade (CHK-008)**: Verificação de rootkits via MD5 de binários (`dpkg -V`) e monitoramento de cronjobs.
+- **Auditoria de Firewall (CHK-009)**: Validação de Isolamento Inter-VLAN, checagem do IPS/IDS (Suricata) e varredura de portas abertas na WAN (Default DROP).
+- **Auditoria de API & MongoDB (CHK-010)**: Verificação de Bind Seguro do banco local (evitando vazamento de DB) e alerta de 2FA.
+- **Melhorias de Estabilidade**: Correções de regex para Sudoers (`CHK-004`) e remoção de falsos positivos do ambiente BusyBox (`CHK-003`). Consulte o [CHANGELOG.md](CHANGELOG.md) para detalhes.
 
 ### v1.0.2
 
