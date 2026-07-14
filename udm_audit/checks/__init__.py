@@ -3,6 +3,7 @@ from .ssh_hardening import SSHHardeningCheck
 from .vpn_security import VPNSecurityCheck
 from .container_security import ContainerSecurityCheck
 from .network_exposure import NetworkExposureCheck, UpdateStatusCheck, LoggingConfigCheck
+from .integrity import IntegrityCheck
 
 ALL_CHECKS = [
     VersionCheck,
@@ -12,6 +13,7 @@ ALL_CHECKS = [
     NetworkExposureCheck,
     UpdateStatusCheck,
     LoggingConfigCheck,
+    IntegrityCheck,
 ]
 
 CHECK_MAP = {cls.check_id: cls for cls in ALL_CHECKS}
