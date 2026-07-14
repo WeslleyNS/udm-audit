@@ -2,9 +2,29 @@
 
 Security audit tool para **UniFi Dream Machine Pro** (UDM Pro / UniFiOS).
 
-Conecta via SSH e executa verificações automatizadas contra CVEs conhecidas,
-misconfigurations e exposições de credenciais. Gera relatório com findings
-classificados por severidade e remediações específicas.
+Conecta via SSH ou executa **localmente dentro do UDM** e roda verificações
+automatizadas contra CVEs conhecidas, misconfigurations e exposições de
+credenciais. Gera relatório com findings classificados por severidade e
+remediações específicas.
+
+---
+
+## Quick Start — Execução direta no UDM
+
+Rode direto no terminal SSH do UDM Pro com um único comando:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/WeslleyNS/udm-audit/main/run.sh | bash
+```
+
+Ou se preferir executar checks específicos:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/WeslleyNS/udm-audit/main/run.sh | bash -s -- --check CHK-002 --check CHK-003
+```
+
+> **Nota:** Requer Python 3.10+ instalado no UDM. O script faz download
+> temporário do projeto, instala dependências e executa `python main.py audit --local`.
 
 ---
 
@@ -44,7 +64,23 @@ python main.py list-checks
 
 ## Uso
 
-### Host único
+### Modo local (dentro do UDM)
+
+```bash
+# Executar todos os checks localmente
+python main.py audit --local
+
+# Apenas checks específicos
+python main.py audit --local --check CHK-002 --check CHK-003
+
+# Salvar relatório JSON
+python main.py audit --local --output report.json
+
+# Exibir apenas HIGH e CRITICAL
+python main.py audit --local --severity HIGH
+```
+
+### Host único (remoto via SSH)
 
 ```bash
 # Com chave SSH (recomendado)
@@ -117,7 +153,7 @@ hosts:
 
 ```json
 {
-  "meta": { "host": "site-sp-01", "timestamp": "2025-01-15T10:30:00Z" },
+  "meta": { "host": "site-sp-01", "version": "1.0.2", "timestamp": "2025-01-15T10:30:00Z" },
   "summary": { "critical": 1, "high": 3, "medium": 2, "low": 4, "pass": 8 },
   "failures": [
     {
@@ -135,11 +171,44 @@ hosts:
 
 ---
 
+## Arquitetura (v1.0.2)
+
+```
+udm_audit/
+├── core/
+│   ├── executor.py      # CommandExecutor Protocol + Local/SSH/Cached strategies
+│   ├── models.py         # Finding, Severity, Status (dataclasses)
+│   └── base.py           # CheckBase com Dependency Injection
+├── checks/
+│   ├── base.py           # Backward compat shim
+│   ├── version.py        # CHK-001
+│   ├── ssh_hardening.py  # CHK-002
+│   ├── vpn_security.py   # CHK-003
+│   ├── container_security.py # CHK-004
+│   └── network_exposure.py   # CHK-005/006/007
+├── reporter/
+│   ├── console.py        # Rich terminal output
+│   └── json_report.py    # JSON para SIEM/ticketing
+└── main.py               # CLI (Click) com --local / --host / --config
+```
+
+### Padrão Strategy (Executors)
+
+```
+CommandExecutor (Protocol)
+├── LocalExecutor    →  subprocess.run  (--local)
+├── SSHExecutor      →  paramiko        (--host / --config)
+└── CachedExecutor   →  dict in-memory  (decorator, evita comandos duplicados)
+```
+
+---
+
 ## Adicionando novos checks
 
 ```python
 # udm_audit/checks/meu_check.py
-from .base import CheckBase, Finding, Severity, Status
+from udm_audit.core.base import CheckBase
+from udm_audit.core.models import Finding, Severity, Status
 
 class MeuCheck(CheckBase):
     check_id = "CHK-008"
@@ -148,7 +217,7 @@ class MeuCheck(CheckBase):
 
     def run(self) -> list[Finding]:
         findings = []
-        out, err, code = self.ssh.exec("comando aqui")
+        out, err, code = self.executor.execute("comando aqui")
 
         if "problema" in out:
             findings.append(self._fail(
@@ -170,9 +239,28 @@ ALL_CHECKS = [..., MeuCheck]
 
 ---
 
+## Changelog
+
+### v1.0.2
+
+- **Modo local** (`--local`): execução direta no terminal do UDM sem SSH
+- **Strategy Pattern**: `CommandExecutor` Protocol com `LocalExecutor`, `SSHExecutor`, `CachedExecutor`
+- **Dependency Injection**: `CheckBase` desacoplado de paramiko
+- **Cache em memória**: evita reexecução de comandos POSIX repetidos na mesma sessão
+- **One-liner curl**: `run.sh` para execução direta no UDM
+- **Backward compat**: `checks/base.py` mantém `SSHClient` como alias
+
+### v1.0.0
+
+- Release inicial com 7 checks de segurança
+- Suporte a host único e fleet via YAML
+- Relatórios terminal (Rich) e JSON
+
+---
+
 ## Notas
 
-- **Ferramenta de audit, não de exploit.** Lê configurações via SSH, não executa payloads.
+- **Ferramenta de audit, não de exploit.** Lê configurações via SSH/local, não executa payloads.
 - CVE IDs são baseados em pesquisa pública até 2025. Verificar sempre no NVD e
   [advisories Ubiquiti](https://community.ubnt.com/t5/Security-Advisory-Board/bg-p/sec_advisories).
 - Testar primeiro em ambiente não-produção.

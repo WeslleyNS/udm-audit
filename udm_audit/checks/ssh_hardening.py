@@ -1,10 +1,14 @@
 """
-CHK-002: SSH Hardening
+CHK-002: SSH Hardening — v1.0.2
 Verifica configurações do sshd que representam risco em UDM Pro.
+
+Refactored to use ``CommandExecutor`` via dependency injection.
+No paramiko imports — all commands go through ``self.executor.execute()``.
 """
 from __future__ import annotations
 import re
-from .base import CheckBase, Finding, Severity, Status
+from udm_audit.core.base import CheckBase
+from udm_audit.core.models import Finding, Severity, Status
 
 
 class SSHHardeningCheck(CheckBase):
@@ -16,7 +20,7 @@ class SSHHardeningCheck(CheckBase):
         findings: list[Finding] = []
 
         # --- Lê sshd_config ---
-        sshd_out, _, code = self.ssh.exec("cat /etc/ssh/sshd_config 2>/dev/null")
+        sshd_out, _, code = self.executor.execute("cat /etc/ssh/sshd_config 2>/dev/null")
 
         if code != 0 or not sshd_out:
             findings.append(self._unknown(
@@ -128,7 +132,7 @@ class SSHHardeningCheck(CheckBase):
                 ))
 
         # --- authorized_keys ---
-        keys_out, _, _ = self.ssh.exec(
+        keys_out, _, _ = self.executor.execute(
             "for f in /root/.ssh/authorized_keys /home/*/.ssh/authorized_keys; "
             "do [ -f \"$f\" ] && echo \"=== $f ===\"; cat \"$f\" 2>/dev/null; done"
         )
@@ -156,7 +160,7 @@ class SSHHardeningCheck(CheckBase):
             ))
 
         # --- Verifica se SSH está exposto em interface WAN ---
-        wan_ssh, _, _ = self.ssh.exec(
+        wan_ssh, _, _ = self.executor.execute(
             "ss -tlnp 2>/dev/null | grep ':22 \\|:22$'"
         )
         if wan_ssh:

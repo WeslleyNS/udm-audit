@@ -1,12 +1,15 @@
 """
-CHK-003: VPN Security
+CHK-003: VPN Security — v1.0.2
 Verifica exposição de credenciais VPN (WireGuard, IPsec, OpenVPN) no UDM Pro.
 O UDM Pro frequentemente atua como concentrador VPN para redes cloud — compromisso
 das chaves = acesso direto às redes cloud sem passar por controles de borda.
+
+Refactored to use ``CommandExecutor`` via dependency injection.
 """
 from __future__ import annotations
 import re
-from .base import CheckBase, Finding, Severity, Status
+from udm_audit.core.base import CheckBase
+from udm_audit.core.models import Finding, Severity, Status
 
 
 class VPNSecurityCheck(CheckBase):
@@ -27,7 +30,7 @@ class VPNSecurityCheck(CheckBase):
     def _check_wireguard(self) -> list[Finding]:
         findings: list[Finding] = []
 
-        wg_dir, _, _ = self.ssh.exec("ls -la /etc/wireguard/ 2>/dev/null")
+        wg_dir, _, _ = self.executor.execute("ls -la /etc/wireguard/ 2>/dev/null")
         if not wg_dir:
             findings.append(self._pass(
                 "WireGuard: nenhum diretório encontrado",
@@ -47,7 +50,6 @@ class VPNSecurityCheck(CheckBase):
         dir_perm_m = re.search(r"^(d\S+)\s+\d+\s+(\w+)\s+(\w+)", wg_dir, re.MULTILINE)
         if dir_perm_m:
             perms = dir_perm_m.group(1)
-            owner = dir_perm_m.group(2)
             # Deve ser drwx------ (700) ou drwx--x--x no máximo
             if "r" in perms[4:] or "r" in perms[7:]:  # group ou other readable
                 findings.append(self._fail(
@@ -60,7 +62,7 @@ class VPNSecurityCheck(CheckBase):
                 ))
 
         # Verifica arquivos .conf individualmente
-        conf_files, _, _ = self.ssh.exec(
+        conf_files, _, _ = self.executor.execute(
             "find /etc/wireguard -name '*.conf' -exec ls -la {} \\; 2>/dev/null"
         )
         if conf_files:
@@ -80,7 +82,7 @@ class VPNSecurityCheck(CheckBase):
                         ))
 
         # Lista peers ativos (informational + verifica peers não documentados)
-        wg_show, _, code = self.ssh.exec("wg show 2>/dev/null")
+        wg_show, _, code = self.executor.execute("wg show 2>/dev/null")
         if wg_show and code == 0:
             peers = re.findall(r"peer:\s+(\S+)", wg_show)
             endpoints = re.findall(r"endpoint:\s+(\S+)", wg_show)
@@ -114,7 +116,7 @@ class VPNSecurityCheck(CheckBase):
             ))
 
         # Verifica se private key está no config (vs keyfile separado)
-        wg_conf_content, _, _ = self.ssh.exec(
+        wg_conf_content, _, _ = self.executor.execute(
             "cat /etc/wireguard/wg0.conf 2>/dev/null || "
             "find /etc/wireguard -name '*.conf' | head -1 | xargs cat 2>/dev/null"
         )
@@ -137,12 +139,12 @@ class VPNSecurityCheck(CheckBase):
     def _check_ipsec(self) -> list[Finding]:
         findings: list[Finding] = []
 
-        ipsec_conf, _, _ = self.ssh.exec("cat /etc/ipsec.conf 2>/dev/null")
-        ipsec_secrets, _, _ = self.ssh.exec("cat /etc/ipsec.secrets 2>/dev/null")
+        ipsec_conf, _, _ = self.executor.execute("cat /etc/ipsec.conf 2>/dev/null")
+        ipsec_secrets, _, _ = self.executor.execute("cat /etc/ipsec.secrets 2>/dev/null")
 
         if not ipsec_conf and not ipsec_secrets:
             # Tenta strongswan
-            swanctl, _, _ = self.ssh.exec("ls /etc/swanctl/ 2>/dev/null")
+            swanctl, _, _ = self.executor.execute("ls /etc/swanctl/ 2>/dev/null")
             if not swanctl:
                 findings.append(self._pass(
                     "IPsec: não configurado",
@@ -167,7 +169,7 @@ class VPNSecurityCheck(CheckBase):
                 ))
 
             # Permissões do arquivo secrets
-            secrets_perm, _, _ = self.ssh.exec("ls -la /etc/ipsec.secrets 2>/dev/null")
+            secrets_perm, _, _ = self.executor.execute("ls -la /etc/ipsec.secrets 2>/dev/null")
             if secrets_perm:
                 perm_m = re.match(r"(-\S+)", secrets_perm)
                 if perm_m:
@@ -189,7 +191,7 @@ class VPNSecurityCheck(CheckBase):
     def _check_openvpn(self) -> list[Finding]:
         findings: list[Finding] = []
 
-        ovpn_dir, _, _ = self.ssh.exec("ls -la /etc/openvpn/ 2>/dev/null")
+        ovpn_dir, _, _ = self.executor.execute("ls -la /etc/openvpn/ 2>/dev/null")
         if not ovpn_dir:
             findings.append(self._pass(
                 "OpenVPN: não configurado",
@@ -198,7 +200,7 @@ class VPNSecurityCheck(CheckBase):
             return findings
 
         # Verifica arquivos de chave com permissões erradas
-        key_files, _, _ = self.ssh.exec(
+        key_files, _, _ = self.executor.execute(
             "find /etc/openvpn -name '*.key' -o -name '*.pem' -o -name 'ta.key' "
             "2>/dev/null | xargs ls -la 2>/dev/null"
         )

@@ -1,10 +1,13 @@
 """
-CHK-005: Network Exposure
-Verifica serviços expostos, portas abertas e configuração de firewall local.
+CHK-005 / CHK-006 / CHK-007 — v1.0.2
+Network Exposure, Update Status, and Logging Configuration checks.
+
+Refactored to use ``CommandExecutor`` via dependency injection.
 """
 from __future__ import annotations
 import re
-from .base import CheckBase, Finding, Severity, Status
+from udm_audit.core.base import CheckBase
+from udm_audit.core.models import Finding, Severity, Status
 
 
 class NetworkExposureCheck(CheckBase):
@@ -27,9 +30,9 @@ class NetworkExposureCheck(CheckBase):
         findings: list[Finding] = []
 
         # Lista portas em escuta
-        ss_out, _, _ = self.ssh.exec("ss -tlnp 2>/dev/null; ss -ulnp 2>/dev/null")
+        ss_out, _, _ = self.executor.execute("ss -tlnp 2>/dev/null; ss -ulnp 2>/dev/null")
         if not ss_out:
-            ss_out, _, _ = self.ssh.exec("netstat -tlunp 2>/dev/null")
+            ss_out, _, _ = self.executor.execute("netstat -tlunp 2>/dev/null")
 
         if not ss_out:
             findings.append(self._unknown(
@@ -40,7 +43,7 @@ class NetworkExposureCheck(CheckBase):
 
         # Portas abertas em 0.0.0.0 (todas interfaces)
         open_on_all = re.findall(
-            r"(?:0\.0\.0\.0|::|\*):(\d+)\s", ss_out
+            r"(?:0\.0\.0\.0|::|\*):\s*(\d+)\s", ss_out
         )
 
         risky_found = []
@@ -101,8 +104,8 @@ class NetworkExposureCheck(CheckBase):
     def _check_firewall(self) -> list[Finding]:
         findings: list[Finding] = []
 
-        ipt, _, _ = self.ssh.exec("iptables -L INPUT -n --line-numbers 2>/dev/null | head -30")
-        nft, _, _ = self.ssh.exec("nft list ruleset 2>/dev/null | head -50")
+        ipt, _, _ = self.executor.execute("iptables -L INPUT -n --line-numbers 2>/dev/null | head -30")
+        nft, _, _ = self.executor.execute("nft list ruleset 2>/dev/null | head -50")
 
         if not ipt and not nft:
             findings.append(self._warn(
@@ -146,7 +149,7 @@ class UpdateStatusCheck(CheckBase):
         findings: list[Finding] = []
 
         # Verifica se há atualização disponível
-        upgrade_check, _, code = self.ssh.exec("ubnt-check-upgrade 2>/dev/null")
+        upgrade_check, _, code = self.executor.execute("ubnt-check-upgrade 2>/dev/null")
         if code == 0 and upgrade_check:
             if "upgrade" in upgrade_check.lower() or "available" in upgrade_check.lower():
                 findings.append(self._fail(
@@ -165,7 +168,7 @@ class UpdateStatusCheck(CheckBase):
                 ))
 
         # Verifica auto-updates do apt (Debian base)
-        auto_upgrade, _, _ = self.ssh.exec(
+        auto_upgrade, _, _ = self.executor.execute(
             "cat /etc/apt/apt.conf.d/20auto-upgrades 2>/dev/null || "
             "cat /etc/apt/apt.conf.d/10periodic 2>/dev/null"
         )
@@ -186,7 +189,7 @@ class UpdateStatusCheck(CheckBase):
             ))
 
         # Últimos logins — detecta atividade suspeita
-        last_logins, _, _ = self.ssh.exec("last -n 15 2>/dev/null | head -15")
+        last_logins, _, _ = self.executor.execute("last -n 15 2>/dev/null | head -15")
         if last_logins:
             findings.append(Finding(
                 self.check_id,
@@ -216,12 +219,12 @@ class LoggingConfigCheck(CheckBase):
         findings: list[Finding] = []
 
         # rsyslog
-        rsyslog, _, _ = self.ssh.exec(
+        rsyslog, _, _ = self.executor.execute(
             "cat /etc/rsyslog.conf /etc/rsyslog.d/*.conf 2>/dev/null"
         )
 
         # syslog-ng
-        syslog_ng, _, _ = self.ssh.exec("cat /etc/syslog-ng/syslog-ng.conf 2>/dev/null")
+        syslog_ng, _, _ = self.executor.execute("cat /etc/syslog-ng/syslog-ng.conf 2>/dev/null")
 
         combined = "\n".join(filter(None, [rsyslog, syslog_ng]))
 
@@ -259,7 +262,7 @@ class LoggingConfigCheck(CheckBase):
             ))
 
         # Verifica se journald está persistindo logs
-        journald, _, _ = self.ssh.exec("cat /etc/systemd/journald.conf 2>/dev/null | grep -i storage")
+        journald, _, _ = self.executor.execute("cat /etc/systemd/journald.conf 2>/dev/null | grep -i storage")
         if journald:
             if "volatile" in journald.lower():
                 findings.append(self._warn(

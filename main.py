@@ -1,11 +1,20 @@
 #!/usr/bin/env python3
 """
-udm-audit — UDM Pro Security Audit Tool
-Conecta via SSH e executa checks de segurança contra CVEs e misconfigs conhecidas.
+udm-audit v1.0.2 — UDM Pro Security Audit Tool
+
+Conecta via SSH ou executa localmente e roda checks de segurança contra
+CVEs e misconfigs conhecidas.
 
 Uso rápido:
+    # Remoto (SSH)
     python main.py audit --host 192.168.1.1 --user root --key ~/.ssh/id_rsa
     python main.py audit --config hosts.yaml --output report.json
+
+    # Local (dentro do próprio UDM)
+    python main.py audit --local
+    python main.py audit --local --check CHK-002 --check CHK-003
+
+    # Checks específicos
     python main.py audit --host 192.168.1.1 --check CHK-002 --check CHK-003
 """
 from __future__ import annotations
@@ -17,7 +26,8 @@ import click
 import paramiko
 import yaml
 
-from udm_audit.checks.base import SSHClient
+from udm_audit.core.executor import LocalExecutor, SSHExecutor, CachedExecutor
+from udm_audit.core.models import Severity, Status
 from udm_audit.checks import ALL_CHECKS, CHECK_MAP
 from udm_audit.reporter import (
     console as rpt,
@@ -65,12 +75,10 @@ def connect_ssh(host: str, port: int, username: str,
 def run_audit(
     host_name: str,
     host_addr: str,
-    ssh: SSHClient,
+    executor: CachedExecutor,
     selected_checks: list[str] | None,
     min_severity: str,
 ) -> list:
-    from udm_audit.checks.base import Severity, Status
-
     checks_to_run = ALL_CHECKS
     if selected_checks:
         checks_to_run = [c for c in ALL_CHECKS if c.check_id in selected_checks]
@@ -82,7 +90,7 @@ def run_audit(
 
     all_findings = []
     for check_cls in checks_to_run:
-        check = check_cls(ssh)
+        check = check_cls(executor)
         rpt.print_check_header(check.check_id, check.name)
         try:
             findings = check.run()
@@ -103,6 +111,15 @@ def run_audit(
         all_findings.extend(findings)
 
     rpt.print_summary(host_name, all_findings)
+
+    # Mostra cache stats se houve hits (indica economia de comandos)
+    stats = executor.stats
+    if stats["hits"] > 0:
+        rpt.console.print(
+            f"[dim]Cache: {stats['hits']} hit(s), {stats['misses']} miss(es), "
+            f"{stats['cached_commands']} comando(s) únicos[/dim]"
+        )
+
     return all_findings
 
 
@@ -112,7 +129,7 @@ def run_audit(
 
 @click.group()
 def cli():
-    """UDM Pro Security Audit Tool — detecta CVEs, misconfigs e exposições."""
+    """UDM Pro Security Audit Tool v1.0.2 — detecta CVEs, misconfigs e exposições."""
     pass
 
 
@@ -141,60 +158,107 @@ def cli():
 )
 @click.option("--output", "-o", help="Salvar relatório JSON em arquivo")
 @click.option("--timeout", default=15, show_default=True, help="Timeout SSH (segundos)")
-def audit(host, port, user, password, key, config, check, severity, output, timeout):
+@click.option(
+    "--local", "-L",
+    is_flag=True,
+    default=False,
+    help="Executar localmente (dentro do próprio UDM, sem SSH)"
+)
+def audit(host, port, user, password, key, config, check, severity, output, timeout, local):
     """Executa audit de segurança em um ou múltiplos UDM Pros."""
 
-    # Resolve lista de hosts
-    hosts: list[dict] = []
+    selected = list(check) if check else None
+    fleet_results: dict[str, tuple[str, list]] = {}
 
-    if config:
+    # =================================================================
+    # Modo LOCAL — execução direta no shell do UDM
+    # =================================================================
+    if local:
+        rpt.console.print(
+            "\n[bold cyan]Modo local — executando checks diretamente neste device...[/bold cyan]"
+        )
+        executor = CachedExecutor(LocalExecutor())
+        h_name = "localhost"
+        h_addr = "127.0.0.1"
+
+        findings = run_audit(h_name, h_addr, executor, selected, severity)
+        fleet_results[h_name] = (h_addr, findings)
+
+    # =================================================================
+    # Modo FLEET — múltiplos hosts via YAML
+    # =================================================================
+    elif config:
         with open(config) as f:
             cfg = yaml.safe_load(f)
         hosts = cfg.get("hosts", [])
         if not hosts:
             click.echo("Nenhum host encontrado no arquivo de configuração.", err=True)
             sys.exit(1)
+
+        for h in hosts:
+            h_name = h.get("name", h["host"])
+            h_addr = h["host"]
+            h_port = h.get("port", 22)
+            h_user = h.get("username", "root")
+            h_pass = h.get("password")
+            h_key  = h.get("key_file")
+
+            rpt.console.print(
+                f"\n[bold cyan]Conectando em {h_name} ({h_addr}:{h_port})...[/bold cyan]"
+            )
+
+            try:
+                start = time.time()
+                raw_ssh = connect_ssh(h_addr, h_port, h_user, h_pass, h_key, timeout)
+                executor = CachedExecutor(SSHExecutor(raw_ssh))
+                elapsed = time.time() - start
+                rpt.console.print(f"[green]✓ Conectado em {elapsed:.1f}s[/green]")
+            except Exception as exc:
+                rpt.console.print(f"[red]✗ Falha ao conectar em {h_name}: {exc}[/red]")
+                continue
+
+            try:
+                findings = run_audit(h_name, h_addr, executor, selected, severity)
+                fleet_results[h_name] = (h_addr, findings)
+            finally:
+                raw_ssh.close()
+                executor.clear()
+
+    # =================================================================
+    # Modo SINGLE HOST — SSH direto
+    # =================================================================
     elif host:
-        hosts = [{
-            "name": host,
-            "host": host,
-            "port": port,
-            "username": user,
-            "password": password,
-            "key_file": key,
-        }]
-    else:
-        click.echo("Especifique --host ou --config.", err=True)
-        sys.exit(1)
+        h_name = host
+        h_addr = host
 
-    selected = list(check) if check else None
-    fleet_results: dict[str, tuple[str, list]] = {}
-
-    for h in hosts:
-        h_name = h.get("name", h["host"])
-        h_addr = h["host"]
-        h_port = h.get("port", 22)
-        h_user = h.get("username", "root")
-        h_pass = h.get("password")
-        h_key  = h.get("key_file")
-
-        rpt.console.print(f"\n[bold cyan]Conectando em {h_name} ({h_addr}:{h_port})...[/bold cyan]")
+        rpt.console.print(
+            f"\n[bold cyan]Conectando em {h_name} ({h_addr}:{port})...[/bold cyan]"
+        )
 
         try:
             start = time.time()
-            raw_ssh = connect_ssh(h_addr, h_port, h_user, h_pass, h_key, timeout)
-            ssh = SSHClient(raw_ssh)
+            raw_ssh = connect_ssh(h_addr, port, user, password, key, timeout)
+            executor = CachedExecutor(SSHExecutor(raw_ssh))
             elapsed = time.time() - start
             rpt.console.print(f"[green]✓ Conectado em {elapsed:.1f}s[/green]")
         except Exception as exc:
             rpt.console.print(f"[red]✗ Falha ao conectar em {h_name}: {exc}[/red]")
-            continue
+            sys.exit(1)
 
         try:
-            findings = run_audit(h_name, h_addr, ssh, selected, severity)
+            findings = run_audit(h_name, h_addr, executor, selected, severity)
             fleet_results[h_name] = (h_addr, findings)
         finally:
             raw_ssh.close()
+
+    # =================================================================
+    # Nenhum modo selecionado
+    # =================================================================
+    else:
+        click.echo("Especifique --host, --config ou --local.", err=True)
+        sys.exit(1)
+
+    # --- Resultado final ---
 
     if not fleet_results:
         rpt.console.print("[red]Nenhum host auditado com sucesso.[/red]")

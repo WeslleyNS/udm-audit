@@ -1,11 +1,14 @@
 """
-CHK-004: Container Security
+CHK-004: Container Security — v1.0.2
 Verifica configuração de containers no UniFiOS (podman) e risco de escape.
+
+Refactored to use ``CommandExecutor`` via dependency injection.
 """
 from __future__ import annotations
 import json
 import re
-from .base import CheckBase, Finding, Severity, Status
+from udm_audit.core.base import CheckBase
+from udm_audit.core.models import Finding, Severity, Status
 
 # Capabilities que permitem escape de container
 DANGEROUS_CAPS = {
@@ -32,9 +35,9 @@ class ContainerSecurityCheck(CheckBase):
     def _check_sudo(self) -> list[Finding]:
         findings: list[Finding] = []
 
-        sudo_l, _, code = self.ssh.exec("sudo -l 2>/dev/null")
-        sudoers, _, _ = self.ssh.exec("cat /etc/sudoers 2>/dev/null")
-        sudoers_d, _, _ = self.ssh.exec("cat /etc/sudoers.d/* 2>/dev/null")
+        sudo_l, _, code = self.executor.execute("sudo -l 2>/dev/null")
+        sudoers, _, _ = self.executor.execute("cat /etc/sudoers 2>/dev/null")
+        sudoers_d, _, _ = self.executor.execute("cat /etc/sudoers.d/* 2>/dev/null")
 
         all_sudo = "\n".join(filter(None, [sudo_l, sudoers, sudoers_d]))
 
@@ -92,7 +95,7 @@ class ContainerSecurityCheck(CheckBase):
     def _check_containers(self) -> list[Finding]:
         findings: list[Finding] = []
 
-        containers, _, code = self.ssh.exec(
+        containers, _, code = self.executor.execute(
             "podman ps --format '{{.ID}} {{.Image}} {{.Names}}' 2>/dev/null || "
             "docker ps --format '{{.ID}} {{.Image}} {{.Names}}' 2>/dev/null"
         )
@@ -118,7 +121,7 @@ class ContainerSecurityCheck(CheckBase):
                 continue
             cid, image, name = parts[0], parts[1], parts[2]
 
-            inspect_out, _, _ = self.ssh.exec(
+            inspect_out, _, _ = self.executor.execute(
                 f"podman inspect {cid} 2>/dev/null || docker inspect {cid} 2>/dev/null"
             )
             if not inspect_out:

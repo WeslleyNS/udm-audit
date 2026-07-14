@@ -8,7 +8,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 from rich import box
-from ..checks.base import Finding, Severity, Status
+from udm_audit.core.models import Finding, Severity, Status
 
 console = Console()
 

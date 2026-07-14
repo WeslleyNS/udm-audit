@@ -1,10 +1,13 @@
 """
-CHK-001: Version check
+CHK-001: Version check — v1.0.2
 Compares UniFiOS and UniFi Network Application versions against known vulnerable ranges.
+
+Refactored to use ``CommandExecutor`` via dependency injection.
 """
 from __future__ import annotations
 import re
-from .base import CheckBase, Finding, Severity, Status
+from udm_audit.core.base import CheckBase
+from udm_audit.core.models import Finding, Severity, Status
 
 # Minimum safe versions per component.
 # Key: component name. Value: (min_safe_version_tuple, CVEs_fixed, advisory_note)
@@ -71,14 +74,14 @@ class VersionCheck(CheckBase):
     def _get_os_version(self) -> tuple[str, str]:
         """Returns (raw_string, source_cmd)."""
         for cmd in self._OS_VERSION_CMDS:
-            out, _, code = self.ssh.exec(cmd)
+            out, _, code = self.executor.execute(cmd)
             if out and code == 0:
                 return out, cmd
         return "", ""
 
     def _get_app_version(self) -> tuple[str, str]:
         for cmd in self._APP_VERSION_CMDS:
-            out, _, code = self.ssh.exec(cmd)
+            out, _, code = self.executor.execute(cmd)
             if out and code == 0:
                 return out, cmd
         return "", ""

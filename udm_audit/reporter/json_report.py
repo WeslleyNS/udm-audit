@@ -3,9 +3,9 @@ JSON reporter — gera relatório estruturado para integração com SIEM/ticketi
 """
 from __future__ import annotations
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
-from ..checks.base import Finding, Severity, Status
+from udm_audit.core.models import Finding, Severity, Status
 
 
 def generate(
@@ -19,8 +19,8 @@ def generate(
     report = {
         "meta": {
             "tool": "udm-audit",
-            "version": "1.0.0",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "version": "1.0.2",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "host": host_name,
             "address": host_addr,
         },
@@ -53,8 +53,8 @@ def generate_fleet(
     fleet_report = {
         "meta": {
             "tool": "udm-audit",
-            "version": "1.0.0",
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "version": "1.0.2",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "hosts": len(results),
         },
         "fleet_summary": {},
