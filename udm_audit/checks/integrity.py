@@ -53,6 +53,12 @@ class IntegrityCheck(CheckBase):
                 # Ignora arquivos de configuração marcados com 'c'
                 if len(parts) == 3 and parts[1] == 'c':
                     continue
+                
+                file_path = parts[-1]
+                # Ignora documentação e manpages que frequentemente mudam ou são removidas no UniFiOS para poupar espaço
+                if file_path.startswith(("/usr/share/doc", "/usr/share/man", "/usr/share/info")):
+                    continue
+                
                 # Se a flag de MD5 ('5') aparecer, o hash foi alterado
                 if '5' in flags:
                     modified_binaries.append(line)
@@ -95,9 +101,17 @@ class IntegrityCheck(CheckBase):
             "base64", "chmod +x", "ubnt-systool", "/tmp/"
         ]
 
+        whitelist = [
+            "alarms/cleanup",
+            "mdns_services.json",
+        ]
+
         suspicious_hits = []
         for line in cron_out.splitlines():
             line_lower = line.lower()
+            if any(wl in line_lower for wl in whitelist):
+                continue
+            
             for kw in suspicious_keywords:
                 if kw in line_lower:
                     suspicious_hits.append(line)
