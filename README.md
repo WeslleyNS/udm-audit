@@ -23,7 +23,7 @@ Ou se preferir executar checks específicos:
 curl -sSL https://raw.githubusercontent.com/WeslleyNS/udm-audit/main/run.sh | bash -s -- --check CHK-002 --check CHK-003
 ```
 
-> **Nota:** Requer Python 3.10+ instalado no UDM. O script faz download
+> **Nota:** Requer Python 3.9+ instalado no UDM. O script faz download
 > temporário do projeto, instala dependências e executa `python main.py audit --local`.
 
 ---
@@ -58,7 +58,7 @@ pip install -r requirements.txt
 python main.py list-checks
 ```
 
-**Requisitos:** Python 3.10+, acesso SSH ao UDM Pro (root ou usuário com sudo).
+**Requisitos:** Python 3.9+, acesso SSH ao UDM Pro (root ou usuário com sudo).
 
 ---
 
@@ -264,4 +264,4 @@ ALL_CHECKS = [..., MeuCheck]
 - CVE IDs são baseados em pesquisa pública até 2025. Verificar sempre no NVD e
   [advisories Ubiquiti](https://community.ubnt.com/t5/Security-Advisory-Board/bg-p/sec_advisories).
 - Testar primeiro em ambiente não-produção.
-- Requer Python 3.10+.
+- Requer Python 3.9+.

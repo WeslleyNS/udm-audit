@@ -34,21 +34,21 @@ trap cleanup EXIT
 info "udm-audit — UDM Pro Security Audit Tool"
 info "Verificando pré-requisitos..."
 
-# Python 3.10+
+# Python 3.9+
 if command -v python3 &>/dev/null; then
     PYTHON=python3
 elif command -v python &>/dev/null; then
     PYTHON=python
 else
-    fail "Python não encontrado. Instale Python 3.10+ antes de continuar."
+    fail "Python não encontrado. Instale Python 3.9+ antes de continuar."
 fi
 
 PY_VERSION=$($PYTHON -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
 PY_MAJOR=$($PYTHON -c "import sys; print(sys.version_info.major)" 2>/dev/null)
 PY_MINOR=$($PYTHON -c "import sys; print(sys.version_info.minor)" 2>/dev/null)
 
-if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); then
-    fail "Python $PY_VERSION detectado. Requer Python 3.10+."
+if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 9 ]); then
+    fail "Python $PY_VERSION detectado. Requer Python 3.9+."
 fi
 ok "Python $PY_VERSION detectado"
 
