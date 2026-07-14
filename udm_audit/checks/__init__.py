@@ -5,6 +5,7 @@ from .container_security import ContainerSecurityCheck
 from .network_exposure import NetworkExposureCheck, UpdateStatusCheck, LoggingConfigCheck
 from .integrity import IntegrityCheck
 from .firewall import FirewallCheck
+from .api import APICheck
 
 ALL_CHECKS = [
     VersionCheck,
@@ -16,6 +17,7 @@ ALL_CHECKS = [
     LoggingConfigCheck,
     IntegrityCheck,
     FirewallCheck,
+    APICheck,
 ]
 
 CHECK_MAP = {cls.check_id: cls for cls in ALL_CHECKS}
