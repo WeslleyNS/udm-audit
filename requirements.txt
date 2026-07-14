@@ -1,0 +1,5 @@
+paramiko>=3.4.0
+rich>=13.7.0
+click>=8.1.7
+pyyaml>=6.0.1
+cryptography>=42.0.0   # dep do paramiko para chaves modernas

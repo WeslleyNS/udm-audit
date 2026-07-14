@@ -1,0 +1,27 @@
+# udm-audit — configuração de hosts
+# Use este arquivo para auditar múltiplos UDM Pros (fleet)
+#
+# Uso: python main.py audit --config hosts.yaml --output report.json
+
+hosts:
+  - name: "site-sp-01"
+    host: "192.168.1.1"
+    port: 22
+    username: "root"
+    key_file: "~/.ssh/id_rsa"
+    # password: "senha"  # alternativa à chave — não recomendado
+
+  - name: "site-rj-01"
+    host: "10.10.0.1"
+    port: 22
+    username: "root"
+    key_file: "~/.ssh/id_rsa"
+
+  - name: "site-bh-01"
+    host: "172.16.0.1"
+    port: 22
+    username: "root"
+    key_file: "~/.ssh/id_rsa_bh"
+
+# Dica: usar chaves SSH diferentes por site é boa prática —
+# compromisso de uma chave não afeta outros sites.
